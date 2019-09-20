@@ -12,9 +12,9 @@ class Kuwo(object):
     下载mp3和mp4
     """
 
-    def __init__(self, artistid, singer,timerer):
-        self.item={}
-        self.error_item=[]
+    def __init__(self, artistid, singer, timerer):
+        self.item = {}
+        self.error_item = []
         self.artistid = artistid
         self.singer = singer
         self.timerer = timerer
@@ -52,8 +52,6 @@ class Kuwo(object):
             self.process_song(self.error_item)
         print('下载完成')
 
-
-
     def process_song(self, song_list):
         """
         解析歌曲列表
@@ -68,7 +66,7 @@ class Kuwo(object):
             self.item['song_name'] = song['name']
             self.item['song_mp4'] = self.mp4_url.format(rid) if 1 == int(song['hasmv']) else None
             self.item['song_mp3'] = self.mp3_url.format(rid)
-            s = float(song['songTimeMinutes'].replace(':','.'))
+            s = float(song['songTimeMinutes'].replace(':', '.'))
             if s >= self.timerer:
                 res = self.process_item()
                 if self.error_item:
@@ -76,10 +74,12 @@ class Kuwo(object):
                         self.error_item.remove(self.item)
 
     def process_item(self):
+        mp3res = mp4res = False
         if self.item['song_mp3'] is not None:
-            return self._download_mp3()
+            mp3res = self._download_mp3()
         if self.item['song_mp4'] is not None:
-            return self._download_mp4()
+            mp4res = self._download_mp4()
+        return mp3res and mp4res
 
     def _download_mp3(self):
         file = self.item['file_path'] + '/mp3/'
@@ -125,20 +125,21 @@ class Kuwo(object):
         with open(file_store, 'wb') as f:
             f.write(res.content)
 
-def _get_arg(opts,op,default):
+
+def _get_arg(opts, op, default):
     val = [arg for (opt, arg) in opts if opt == op]
     return default if 0 == len(val) else val[0]
+
 
 if __name__ == '__main__':
     argv = sys.argv[1:]
     try:
-        opts, args = getopt.getopt(argv, "hi:f:", ["ifile=", "ffile=","tfile="])
+        opts, args = getopt.getopt(argv, "hi:f:", ["ifile=", "ffile=", "tfile="])
     except getopt.GetoptError:
         print('kuwo.py -i <artisid> -f <singer> -t <min song timer>')
         sys.exit(2)
-    artid = _get_arg(opts,'-i',336)
-    singer = _get_arg(opts,'-f','周杰伦')
-    timerer = _get_arg(opts,'-t',2.5)
-    kuwo = Kuwo(artid, singer,float(timerer))
+    artid = _get_arg(opts, '-i', 1486611)
+    singer = _get_arg(opts, '-f', '陈雪凝')
+    timerer = _get_arg(opts, '-t', 2.5)
+    kuwo = Kuwo(artid, singer, float(timerer))
     kuwo.go()
-
