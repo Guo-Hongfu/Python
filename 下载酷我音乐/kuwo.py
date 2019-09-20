@@ -134,7 +134,7 @@ def _get_arg(opts, op, default):
 if __name__ == '__main__':
     argv = sys.argv[1:]
     try:
-        opts, args = getopt.getopt(argv, "hi:f:", ["ifile=", "ffile=", "tfile="])
+        opts, args = getopt.getopt(argv, "i:f:t:", ["ifile=", "ffile=", "tfile="])
     except getopt.GetoptError:
         print('kuwo.py -i <artisid> -f <singer> -t <min song timer>')
         sys.exit(2)
@@ -143,3 +143,4 @@ if __name__ == '__main__':
     timerer = _get_arg(opts, '-t', 2.5)
     kuwo = Kuwo(artid, singer, float(timerer))
     kuwo.go()
+
