@@ -6,6 +6,9 @@ from multiprocessing import Process
 
 import requests
 
+"""
+无更新内容，提交只祝贺祖国七十周岁生日快乐，越来越强大。
+"""
 
 class Kuwo(object):
     """
