@@ -21,6 +21,7 @@ class Kuwo(object):
         self.artistid = artistid
         self.singer = singer
         self.timerer = timerer
+        self.detail_url = "http://www.kuwo.cn/singer_detail/{0}"
         self.song_list_url = "http://www.kuwo.cn/api/www/artist/artistMusic?artistid={0}&pn={1}&rn=30"
         self.mp3_url = "http://www.kuwo.cn/url?format=mp3&rid={0}&response=url&type=convert_url3&br=2000&from=web"
         self.mp4_url = "http://www.kuwo.cn/url?rid={0}&response=url&format=mp4|mkv&type=convert_url"
@@ -28,10 +29,13 @@ class Kuwo(object):
             'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.131 Safari/537.36",
             'Accept': "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
             'Host': "www.kuwo.cn",
-            'Cookie': "gtoken=qB2tWTjT4TcN; gid=62656d34-5557-4350-8879-2efadb925855; Hm_lvt_cdb524f42f0ce19b169a8071123a4797=1568785568; Hm_lpvt_cdb524f42f0ce19b169a8071123a4797=1568789556"
         }
 
     def go(self):
+        token = self.get_token(self.artistid)
+        self.headers['Cookie'] = "kw_token={0}".format(token)
+        self.headers['csrf'] = token
+
         response = requests.get(self.song_list_url.format(self.artistid, 1), headers=self.headers)
         data = response.json()
         if 200 == data['code']:
@@ -54,6 +58,14 @@ class Kuwo(object):
             print('重新下载失败的歌曲:')
             self.process_song(self.error_item)
         print('下载完成')
+
+    """
+    获取csrf
+    """
+    def get_token(self,singer_id):
+        response = requests.get(self.detail_url.format(singer_id),headers=self.headers)
+        return response.cookies['kw_token']
+
 
     def process_song(self, song_list):
         """
