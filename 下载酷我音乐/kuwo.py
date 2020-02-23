@@ -2,6 +2,7 @@ import getopt
 import math
 import os
 import sys
+import asyncio
 from multiprocessing import Process
 
 import requests
@@ -123,22 +124,33 @@ class Kuwo(object):
     def _download(self, file_store, file_link, fix):
         try:
             res = requests.get(file_link, timeout=10, headers=self.headers)
+            loop = asyncio.get_event_loop()
             if 'mp3' == fix:
                 data_mp3 = res.json()
-                self._save(data_mp3['url'], file_store)
+                task = loop.create_task(self._save(data_mp3['url'], file_store))
+                task.add_done_callback(self._save_result)
+                loop.run_until_complete(task)
+
             if 'mp4' == fix:
                 down_mp4_url = res.content.decode()
-                self._save(down_mp4_url, file_store)
+                task = loop.create_task(self._save(down_mp4_url, file_store))
+                loop.run_until_complete(task)
             return True
         except:
             self.error_item.append(self.item)
             print('None,下载失败--{0}'.format(self.item['song_name']))
             return False
 
-    def _save(self, down_url, file_store):
-        res = requests.get(down_url, timeout=50)
+    async def _save(self, down_url, file_store):
+        res = requests.get(down_url, timeout=50, stream=True)
         with open(file_store, 'wb') as f:
-            f.write(res.content)
+            for chunk in res.iter_content(chunk_size=512):
+                if chunk:
+                    f.write(chunk)
+        return True
+
+    def _save_result(self,future):
+        print(future.result())
 
 
 def _get_arg(opts, op, default):
@@ -153,8 +165,8 @@ if __name__ == '__main__':
     except getopt.GetoptError:
         print('kuwo.py -i <artisid> -f <singer> -t <min song timer>')
         sys.exit(2)
-    artid = _get_arg(opts, '-i', 1486611)
-    singer = _get_arg(opts, '-f', '陈雪凝')
+    artid = _get_arg(opts, '-i', 336)
+    singer = _get_arg(opts, '-f', '周杰伦')
     timerer = _get_arg(opts, '-t', 2.5)
     kuwo = Kuwo(artid, singer, float(timerer))
     kuwo.go()
