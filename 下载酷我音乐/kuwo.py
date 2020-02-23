@@ -2,14 +2,18 @@ import getopt
 import math
 import os
 import sys
+import json
+import time
 import asyncio
 from multiprocessing import Process
-
+from queue import Queue
+from threading import Thread
 import requests
 
 """
 无更新内容，提交只祝贺祖国七十周岁生日快乐，越来越强大。
 """
+
 
 class Kuwo(object):
     """
@@ -18,6 +22,7 @@ class Kuwo(object):
 
     def __init__(self, artistid, singer, timerer):
         self.item = {}
+        self.q = Queue()
         self.error_item = []
         self.artistid = artistid
         self.singer = singer
@@ -36,14 +41,11 @@ class Kuwo(object):
         token = self.get_token(self.artistid)
         self.headers['Cookie'] = "kw_token={0}".format(token)
         self.headers['csrf'] = token
-
         response = requests.get(self.song_list_url.format(self.artistid, 1), headers=self.headers)
         data = response.json()
         if 200 == data['code']:
             total = data['data']['total']
             page_count = math.ceil(int(total) / 30) + 1
-
-            # pool = Pool()
             for i in range(1, page_count):
                 response = requests.get(self.song_list_url.format(self.artistid, i), headers=self.headers)
                 data = response.json()
@@ -101,17 +103,27 @@ class Kuwo(object):
         file = self.item['file_path'] + '/mp3/'
         file_store = self._make_file_store(file)
         file_store = file_store + self.item['song_name'] + '.mp3'
-        con_text = self._download(file_store, self.item['song_mp3'], 'mp3')
-        print('下载完：{0}--MP3'.format(self.item['song_name']))
-        return con_text
+        t1 = Thread(target=self._download, args=(file_store, self.item['song_mp3'], 'mp3', self.q,))
+        t2 = Thread(target=self._save, args=(self.q,))
+        t1.start()
+        t2.start()
+        return True
+        # con_text = self._download(file_store, self.item['song_mp3'], 'mp3')
+        # print('下载完：{0}--MP3'.format(self.item['song_name']))
+        # return con_text
 
     def _download_mp4(self):
         file = self.item['file_path'] + '/mp4/'
         mp4_store = self._make_file_store(file)
         file_store = mp4_store + self.item['song_name'] + '.mp4'
-        con_text = self._download(file_store, self.item['song_mp4'], 'mp4')
-        print('下载完：{0} MP4'.format(self.item['song_name']))
-        return con_text
+        t1 = Thread(target=self._download, args=(file_store, self.item['song_mp4'], 'mp4',self.q,))
+        t2 = Thread(target=self._save, args=(self.q,))
+        t1.start()
+        t2.start()
+        return True
+        # con_text = self._download(file_store, self.item['song_mp4'], 'mp4')
+        # print('下载完：{0} MP4'.format(self.item['song_name']))
+        # return con_text
 
     def _make_file_store(self, name):
         project_dir = os.path.dirname('__file__')
@@ -121,33 +133,52 @@ class Kuwo(object):
             os.makedirs(files_store)
         return files_store
 
-    def _download(self, file_store, file_link, fix):
+    def _download(self, file_store, file_link, fix,out_q):
         try:
             res = requests.get(file_link, timeout=10, headers=self.headers)
-            loop = asyncio.get_event_loop()
+            # loop = asyncio.get_event_loop()
+            down_item = None
             if 'mp3' == fix:
                 data_mp3 = res.json()
-                task = loop.create_task(self._save(data_mp3['url'], file_store))
-                task.add_done_callback(self._save_result)
-                loop.run_until_complete(task)
-
+                down_item = {"url":data_mp3['url'],"filepath":file_store}
             if 'mp4' == fix:
                 down_mp4_url = res.content.decode()
-                task = loop.create_task(self._save(down_mp4_url, file_store))
-                loop.run_until_complete(task)
+                down_item = {"url": down_mp4_url, "filepath": file_store}
+            out_q.put(down_item)
             return True
-        except:
+        except Exception as err:
             self.error_item.append(self.item)
-            print('None,下载失败--{0}'.format(self.item['song_name']))
+            print('None,下载失败--{0},失败原因:{1}'.format(self.item['song_name'],err))
             return False
 
-    async def _save(self, down_url, file_store):
+    # async def _save(self, down_url, file_store):
+    #     res = requests.get(down_url, timeout=50, stream=True)
+    #     with open(file_store, 'wb') as f:
+    #         for chunk in res.iter_content(chunk_size=512):
+    #             if chunk:
+    #                 f.write(chunk)
+    #     return True
+
+    def _save(self,out_in):
+        data = out_in.get()
+        down_url = data['url']
+        file_store = data['filepath']
         res = requests.get(down_url, timeout=50, stream=True)
         with open(file_store, 'wb') as f:
             for chunk in res.iter_content(chunk_size=512):
                 if chunk:
                     f.write(chunk)
+        print('下载{0}'.format(file_store))
         return True
+        # while True:
+        #     item = self.kuwo_queue.pop()
+        #     if item:
+        #         print("item=={0}".format(item))
+        #     else:
+        #         time.sleep(3)
+        # while True:
+
+
 
     def _save_result(self,future):
         print(future.result())
@@ -165,8 +196,8 @@ if __name__ == '__main__':
     except getopt.GetoptError:
         print('kuwo.py -i <artisid> -f <singer> -t <min song timer>')
         sys.exit(2)
-    artid = _get_arg(opts, '-i', 336)
-    singer = _get_arg(opts, '-f', '周杰伦')
+    artid = _get_arg(opts, '-i', 5371)
+    singer = _get_arg(opts, '-f', '邓紫棋')
     timerer = _get_arg(opts, '-t', 2.5)
     kuwo = Kuwo(artid, singer, float(timerer))
     kuwo.go()
