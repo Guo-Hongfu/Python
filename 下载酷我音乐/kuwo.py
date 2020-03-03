@@ -9,7 +9,7 @@ from multiprocessing import Process
 from queue import Queue
 from threading import Thread
 import requests
-
+requests.packages.urllib3.disable_warnings()
 """
 无更新内容，提交只祝贺祖国七十周岁生日快乐，越来越强大。
 """
@@ -77,53 +77,62 @@ class Kuwo(object):
         :return:
         """
         for song in song_list:
-            self.item = {}
-            self.item['file_path'] = self.singer
-            rid = song['rid']
-            self.item['artist'] = song['artist']
-            self.item['song_name'] = song['name']
-            self.item['song_mp4'] = self.mp4_url.format(rid) if 1 == int(song['hasmv']) else None
-            self.item['song_mp3'] = self.mp3_url.format(rid)
-            s = float(song['songTimeMinutes'].replace(':', '.'))
-            if s >= self.timerer:
-                res = self.process_item()
-                if self.error_item:
-                    if res is True and self.item in self.error_item:
-                        self.error_item.remove(self.item)
+            track = song['track']
+            if track >0:
+                item = {}
+                item['file_path'] = self.singer
+                rid = song['rid']
+                item['track'] = song['track']
+                item['rid'] = song['rid']
+                item['artist'] = song['artist']
+                item['song_name'] = song['name']
+                item['song_mp4'] = self.mp4_url.format(rid) if 1 == int(song['hasmv']) else None
+                item['song_mp3'] = self.mp3_url.format(rid)
+                self.process_item(item)
+            # s = float(song['songTimeMinutes'].replace(':', '.'))
+            # # if s >= self.timerer:
+            # if track >= 0:
+            #
+            #     res = self.process_item(item)
+            #     if self.error_item:
+            #         if res is True and self.item in self.error_item:
+            #             self.error_item.remove(self.item)
 
-    def process_item(self):
+    def process_item(self,item):
         mp3res = mp4res = False
-        if self.item['song_mp3'] is not None:
-            mp3res = self._download_mp3()
-        if self.item['song_mp4'] is not None:
-            mp4res = self._download_mp4()
+        if item['song_mp3'] is not None:
+            mp3res = self._download_mp3(item)
+        if item['song_mp4'] is not None:
+            mp4res = self._download_mp4(item)
         return mp3res and mp4res
 
-    def _download_mp3(self):
-        file = self.item['file_path'] + '/mp3/'
+    def _download_mp3(self,item):
+        file = item['file_path'] + '/mp3/'
         file_store = self._make_file_store(file)
-        file_store = file_store + self.item['song_name'] + '.mp3'
-        t1 = Thread(target=self._download, args=(file_store, self.item['song_mp3'], 'mp3', self.q,))
-        t2 = Thread(target=self._save, args=(self.q,))
-        t1.start()
-        t2.start()
-        return True
-        # con_text = self._download(file_store, self.item['song_mp3'], 'mp3')
-        # print('下载完：{0}--MP3'.format(self.item['song_name']))
+        file_store = file_store + item['song_name'].replace('/','_') + '.mp3'
+        # t1 = Thread(target=self._download, args=(file_store, self.item['song_mp3'], 'mp3', self.q,))
+        # t2 = Thread(target=self._save, args=(self.q,))
+        # t1.start()
+        # t2.start()
+        # return True
+        con_text = self._download(file_store, item['song_mp3'], 'mp3')
+        print('下载完：{0}--MP3'.format(item['song_name']))
+        return con_text
+
         # return con_text
 
-    def _download_mp4(self):
-        file = self.item['file_path'] + '/mp4/'
+    def _download_mp4(self,item):
+        file = item['file_path'] + '/mp4/'
         mp4_store = self._make_file_store(file)
-        file_store = mp4_store + self.item['song_name'] + '.mp4'
-        t1 = Thread(target=self._download, args=(file_store, self.item['song_mp4'], 'mp4',self.q,))
-        t2 = Thread(target=self._save, args=(self.q,))
-        t1.start()
-        t2.start()
-        return True
-        # con_text = self._download(file_store, self.item['song_mp4'], 'mp4')
+        file_store = mp4_store + item['song_name'].replace('/','_') + '.mp4'
+        # t1 = Thread(target=self._download, args=(file_store, self.item['song_mp4'], 'mp4',self.q,))
+        # t2 = Thread(target=self._save, args=(self.q,))
+        # t1.start()
+        # t2.start()
+        # return True
+        con_text = self._download(file_store, item['song_mp4'], 'mp4')
         # print('下载完：{0} MP4'.format(self.item['song_name']))
-        # return con_text
+        return con_text
 
     def _make_file_store(self, name):
         project_dir = os.path.dirname('__file__')
@@ -133,43 +142,63 @@ class Kuwo(object):
             os.makedirs(files_store)
         return files_store
 
-    def _download(self, file_store, file_link, fix,out_q):
+    def _download(self, file_store, file_link, fix,out_q=False):
         try:
-            res = requests.get(file_link, timeout=10, headers=self.headers)
+            res = requests.get(file_link, timeout=10, headers=self.headers,verify=False)
             # loop = asyncio.get_event_loop()
             down_item = None
             if 'mp3' == fix:
                 data_mp3 = res.json()
                 down_item = {"url":data_mp3['url'],"filepath":file_store}
+                return self._save(down_item)
             if 'mp4' == fix:
-                down_mp4_url = res.content.decode()
-                down_item = {"url": down_mp4_url, "filepath": file_store}
-            out_q.put(down_item)
+                return True
+                pass
+                # down_mp4_url = res.content.decode()
+                # down_item = {"url": down_mp4_url, "filepath": file_store}
+                # self._save(down_item)
+
+            # main_task = asyncio.Task(self._save(down_item))
+            # loop.run_until_complete(main_task)
+            # out_q.put(down_item)
             return True
         except Exception as err:
-            self.error_item.append(self.item)
-            print('None,下载失败--{0},失败原因:{1}'.format(self.item['song_name'],err))
+            # self.error_item.append(self.item)
+            print('None,下载失败--{0},失败原因:{1}'.format(file_store,err))
             return False
 
-    # async def _save(self, down_url, file_store):
-    #     res = requests.get(down_url, timeout=50, stream=True)
-    #     with open(file_store, 'wb') as f:
+    # async def _save(self, down_item):
+    #     down_url = down_item['url']
+    #     file_store = down_item['filepath']
+    #     res = requests.get(down_url, timeout=50, stream=True,verify=False)
+    #     with open(file_store, 'wb+') as f:
     #         for chunk in res.iter_content(chunk_size=512):
     #             if chunk:
     #                 f.write(chunk)
     #     return True
 
-    def _save(self,out_in):
-        data = out_in.get()
-        down_url = data['url']
-        file_store = data['filepath']
-        res = requests.get(down_url, timeout=50, stream=True)
-        with open(file_store, 'wb') as f:
+    def _save(self, down_item):
+        down_url = down_item['url']
+        file_store = down_item['filepath']
+        res = requests.get(down_url, timeout=50, stream=True, verify=False)
+        with open(file_store, 'wb+') as f:
             for chunk in res.iter_content(chunk_size=512):
                 if chunk:
                     f.write(chunk)
-        print('下载{0}'.format(file_store))
         return True
+
+    # def _save(self,out_in):
+    #     data = out_in.get()
+    #     # data = out_in
+    #     down_url = data['url']
+    #     file_store = data['filepath']
+    #     res = requests.get(down_url, timeout=50, stream=True,verify=False)
+    #     with open(file_store, 'wb') as f:
+    #         for chunk in res.iter_content(chunk_size=512):
+    #             if chunk:
+    #                 f.write(chunk)
+    #     print('下载{0}'.format(file_store))
+    #     return True
         # while True:
         #     item = self.kuwo_queue.pop()
         #     if item:
@@ -196,9 +225,9 @@ if __name__ == '__main__':
     except getopt.GetoptError:
         print('kuwo.py -i <artisid> -f <singer> -t <min song timer>')
         sys.exit(2)
-    artid = _get_arg(opts, '-i', 5371)
-    singer = _get_arg(opts, '-f', '邓紫棋')
-    timerer = _get_arg(opts, '-t', 2.5)
+    artid = _get_arg(opts, '-i', 1456705)
+    singer = _get_arg(opts, '-f', '毛不易')
+    timerer = _get_arg(opts, '-t', 3.5)
     kuwo = Kuwo(artid, singer, float(timerer))
     kuwo.go()
 
